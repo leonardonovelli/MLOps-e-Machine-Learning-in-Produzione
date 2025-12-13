@@ -8,6 +8,7 @@ Eseguo solo su un range di 200 osservazioni per non rendere lungo il processo
 
 import json
 import os
+import random
 from datetime import datetime
 
 import numpy as np
@@ -24,6 +25,11 @@ MODEL_NAME = "cardiffnlp/twitter-roberta-base-sentiment-latest"
 OUTPUT_DIR = "model_data"
 BEST_METRICS_FILE = "best_metrics.json"
 
+# parametri dataset
+TRAIN_SIZE = 200      # numero di esempi di train
+EVAL_SIZE = 50        # numero di esempi di eval
+SEED = 42             # seed per riproducibilità
+
 # ------------------------------
 # Dataset rapido
 # ------------------------------
@@ -33,12 +39,20 @@ dataset = dataset.rename_column("label", "labels")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 tokenizer.pad_token = tokenizer.eos_token
 
+# selezione random dei sample
+def sample_dataset(dataset_split, n, seed=42):
+    indices = list(range(len(dataset_split)))
+    random.Random(seed).shuffle(indices)
+    selected_indices = indices[:n]
+    return dataset_split.select(selected_indices)
+
+# tokenizzazione
 def preprocess(batch):
-    """Tokenizza i testi per il modello."""
     return tokenizer(batch["text"], padding="max_length", truncation=True, max_length=64)
 
-train_dataset = dataset["train"].select(range(200)).map(preprocess, batched=True)
-eval_dataset = dataset["validation"].select(range(50)).map(preprocess, batched=True)
+# train ed eval dataset random
+train_dataset = sample_dataset(dataset["train"], TRAIN_SIZE, SEED).map(preprocess, batched=True)
+eval_dataset = sample_dataset(dataset["validation"], EVAL_SIZE, SEED).map(preprocess, batched=True)
 
 # ------------------------------
 # Modello
@@ -89,6 +103,11 @@ trainer.train()
 # ------------------------------
 # Valutazione e salvataggio metriche
 # ------------------------------
+
+# Salvo il modello per eventuale push su HF
+trainer.save_model(OUTPUT_DIR)
+tokenizer.save_pretrained(OUTPUT_DIR)
+
 metrics = trainer.evaluate(eval_dataset)
 metrics["timestamp"] = datetime.utcnow().isoformat()  # UTC in formato ISO
 print("Validation metrics:", metrics)
