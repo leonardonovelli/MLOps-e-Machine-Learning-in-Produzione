@@ -1,11 +1,24 @@
 # train.py
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, TrainingArguments, Trainer
-from datasets import load_dataset
-import numpy as np
-import evaluate
+
+"""
+Training pipeline per CI/CD.
+Esegue un training rapido su dataset HuggingFace e valuta metriche.
+Eseguo solo su un range di 200 osservazioni per non rendere lungo il processo
+"""
+
 import json
 import os
 from datetime import datetime
+
+import numpy as np
+import evaluate
+from datasets import load_dataset
+from transformers import (
+    AutoTokenizer,
+    AutoModelForSequenceClassification,
+    TrainingArguments,
+    Trainer,
+)
 
 MODEL_NAME = "cardiffnlp/twitter-roberta-base-sentiment-latest"
 OUTPUT_DIR = "model_data"
@@ -21,6 +34,7 @@ tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 tokenizer.pad_token = tokenizer.eos_token
 
 def preprocess(batch):
+    """Tokenizza i testi per il modello."""
     return tokenizer(batch["text"], padding="max_length", truncation=True, max_length=64)
 
 train_dataset = dataset["train"].select(range(200)).map(preprocess, batched=True)
@@ -36,6 +50,7 @@ model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME)
 # ------------------------------
 accuracy = evaluate.load("accuracy")
 def compute_metrics(eval_pred):
+    """Calcola accuracy sul dataset di validazione."""
     logits, labels = eval_pred
     preds = np.argmax(logits, axis=-1)
     return {"accuracy": accuracy.compute(predictions=preds, references=labels)["accuracy"]}
@@ -78,26 +93,26 @@ metrics = trainer.evaluate(eval_dataset)
 metrics["timestamp"] = datetime.utcnow().isoformat()  # UTC in formato ISO
 print("Validation metrics:", metrics)
 
-with open(OUTPUT_DIR+"/metrics.json", "w") as f:
+with open(OUTPUT_DIR+"/metrics.json", "w", encoding="utf-8") as f:
     json.dump(metrics, f, indent=2)
 
 # --- controllo best accuracy ---
 val_accuracy = metrics["eval_accuracy"]
 
 if os.path.exists(OUTPUT_DIR+"/"+BEST_METRICS_FILE):
-    with open(OUTPUT_DIR+"/"+BEST_METRICS_FILE) as f:
+    with open(OUTPUT_DIR+"/"+BEST_METRICS_FILE, encoding="utf-8") as f:
         best_metrics = json.load(f)
-    best_acc = best_metrics.get("accuracy", 0)
+    best_accuracy = best_metrics.get("accuracy", 0)
 else:
-    best_acc = 0
+    best_accuracy = 0
 
-if val_accuracy > best_acc:
-    print(f"Accuracy migliorata: {val_accuracy:.4f} > {best_acc:.4f}.")
+if val_accuracy > best_accuracy:
+    print(f"Accuracy migliorata: {val_accuracy:.4f} > {best_accuracy:.4f}.")
     best_metrics = {
         "accuracy": val_accuracy,
         "timestamp": datetime.utcnow().isoformat()
     }
-    with open(OUTPUT_DIR+"/"+BEST_METRICS_FILE, "w") as f:
+    with open(OUTPUT_DIR+"/"+BEST_METRICS_FILE, "w", encoding="utf-8") as f:
         json.dump(best_metrics, f, indent=2)
 else:
-    print(f"Accuracy {val_accuracy:.4f} non supera il best {best_acc:.4f}.")
+    print(f"Accuracy {val_accuracy:.4f} non supera il best {best_accuracy:.4f}.")

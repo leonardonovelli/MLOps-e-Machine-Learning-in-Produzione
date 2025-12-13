@@ -1,5 +1,9 @@
 # tests.py
-import pytest
+
+"""
+Test di base sul modello di sentiment.
+"""
+
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 MODEL_NAME = "cardiffnlp/twitter-roberta-base-sentiment-latest"
