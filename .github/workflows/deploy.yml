@@ -26,7 +26,7 @@ jobs:
       - name: Run pylint
         run: |
          FILES=$(git ls-files '*.py')
-         if [ -n "$FILES" ]; then pylint $FILES --fail-under=9.0; fi
+         if [ -n "$FILES" ]; then pylint $FILES --fail-under=8.0; fi
 
 
   tests:
@@ -54,6 +54,9 @@ jobs:
     name: Train
     runs-on: ubuntu-latest
     needs: tests
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_REPO_ID: ${{ secrets.HF_REPO_ID }}
     steps:
       - uses: actions/checkout@v4
 

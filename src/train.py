@@ -10,11 +10,10 @@ import json
 import os
 import random
 from datetime import datetime
-from utils import push_to_hf
-
 import numpy as np
 import evaluate
 from datasets import load_dataset
+from utils import push_to_hf
 from transformers import (
     AutoTokenizer,
     AutoModelForSequenceClassification,
