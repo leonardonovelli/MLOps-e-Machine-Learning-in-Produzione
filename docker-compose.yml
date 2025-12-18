@@ -1,0 +1,23 @@
+services:
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      HF_MODEL: ${HF_REPO_ID}
+      HF_TOKEN: ${HF_TOKEN}
+    volumes:
+      - ./data:/data
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/var/lib/grafana/csv
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      GF_INSTALL_PLUGINS: marcusolsson-csv-datasource
+      GF_SECURITY_ADMIN_PASSWORD: "admin"
+      GF_USERS_ALLOW_SIGN_UP: "false"

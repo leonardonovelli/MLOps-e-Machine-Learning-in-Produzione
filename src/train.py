@@ -10,6 +10,7 @@ import json
 import os
 import random
 from datetime import datetime
+from utils import push_to_hf
 
 import numpy as np
 import evaluate
@@ -26,8 +27,8 @@ OUTPUT_DIR = "model_data"
 BEST_METRICS_FILE = "best_metrics.json"
 
 # parametri dataset
-TRAIN_SIZE = 200      # numero di esempi di train
-EVAL_SIZE = 50        # numero di esempi di eval
+TRAIN_SIZE = 1000      # numero di esempi di train
+EVAL_SIZE = 200        # numero di esempi di eval
 SEED = 42             # seed per riproducibilità
 
 # ------------------------------
@@ -76,7 +77,7 @@ args = TrainingArguments(
     output_dir=OUTPUT_DIR,
     per_device_train_batch_size=4,
     per_device_eval_batch_size=4,
-    num_train_epochs=1,
+    num_train_epochs=4,
     save_strategy="no",
     logging_strategy="steps",
     logging_steps=10,
@@ -133,5 +134,7 @@ if val_accuracy > best_accuracy:
     }
     with open(OUTPUT_DIR+"/"+BEST_METRICS_FILE, "w", encoding="utf-8") as f:
         json.dump(best_metrics, f, indent=2)
+
+    push_to_hf(local_dir=OUTPUT_DIR)
 else:
     print(f"Accuracy {val_accuracy:.4f} non supera il best {best_accuracy:.4f}.")
