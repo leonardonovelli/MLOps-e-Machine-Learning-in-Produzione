@@ -5,6 +5,10 @@ from huggingface_hub import HfApi
 
 load_dotenv()
 
+"""
+Push del modello su HF.
+"""
+
 def push_to_hf(local_dir):
     hf_token = os.environ.get("HF_TOKEN")
     if hf_token is None:

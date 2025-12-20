@@ -1,12 +1,13 @@
 """
 FastAPI inference service.
-Usa il modello caricato su HF e calcola le metriche scrivendole in un CSV che importo in grafana.
+Usa modello Hugging Face per sentiment analysis.
 """
 
-import csv
 import os
 import time
 from datetime import datetime
+
+import pyodbc
 from fastapi import FastAPI
 from pydantic import BaseModel
 from transformers import pipeline
@@ -16,35 +17,58 @@ load_dotenv()
 
 HF_MODEL = os.environ.get("HF_REPO_ID")
 HF_TOKEN = os.environ.get("HF_TOKEN")
-CSV_PATH = "/data/metrics.csv"
+
+SQL_SERVER = os.environ.get("SQL_SERVER")
+SQL_PORT = os.environ.get("SQL_PORT")
+SQL_USER = os.environ.get("SQL_USER")
+SQL_PASSWORD = os.environ.get("SQL_PASSWORD")
+SQL_DB = os.environ.get("SQL_DB")
+
+if not HF_MODEL or not HF_TOKEN:
+    raise RuntimeError("HF_REPO_ID o HF_TOKEN mancanti")
 
 app = FastAPI(title="Sentiment API")
 
+# -------------------------------------------------
+# Model preso da HF
+# -------------------------------------------------
 classifier = pipeline(
     "sentiment-analysis",
     model=HF_MODEL,
     token=HF_TOKEN
 )
 
-file_exists = os.path.exists(CSV_PATH)
+# -------------------------------------------------
+# DB CONNECTION
+# -------------------------------------------------
+conn = pyodbc.connect(
+    f"DRIVER={{ODBC Driver 18 for SQL Server}};"
+    f"SERVER={SQL_SERVER},{SQL_PORT};"
+    f"DATABASE={SQL_DB};"
+    f"UID={SQL_USER};"
+    f"PWD={SQL_PASSWORD};"
+    "Encrypt=no;"
+)
+cursor = conn.cursor()
 
-# Metric counters (in-memory, coerenti col servizio)
-requests_total = 0
-positive_count = 0
-confidence_sum = 0.0
+cursor.execute("""
+IF NOT EXISTS (
+    SELECT * FROM sysobjects WHERE name='metrics' AND xtype='U'
+)
+CREATE TABLE metrics (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    timestamp DATETIME2,
+    text NVARCHAR(100),
+    label NVARCHAR(32),
+    confidence FLOAT,
+    latency_ms FLOAT
+)
+""")
+conn.commit()
 
-if not file_exists:
-    with open(CSV_PATH, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow([
-            "timestamp",
-            "requests_total",
-            "positive_ratio",
-            "avg_confidence",
-            "latency_ms"
-        ])
-
-
+# -------------------------------------------------
+# REQUEST / RESPONSE API
+# -------------------------------------------------
 class PredictRequest(BaseModel):
     text: str
 
@@ -52,38 +76,41 @@ class PredictRequest(BaseModel):
 class PredictResponse(BaseModel):
     label: str
     score: float
+    latency_ms: float
 
 
+# -------------------------------------------------
+# ENDPOINT
+# -------------------------------------------------
 @app.post("/predict", response_model=PredictResponse)
 def predict(payload: PredictRequest):
-    global requests_total, positive_count, confidence_sum
-
     start = time.time()
 
     result = classifier(payload.text)[0]
     label = result["label"]
     score = float(result["score"])
 
-    requests_total += 1
-    confidence_sum += score
-    if label == "positive":
-        positive_count += 1
-
     latency_ms = (time.time() - start) * 1000
-    positive_ratio = positive_count / requests_total
-    avg_confidence = confidence_sum / requests_total
+    timestamp = datetime.utcnow()
 
-    with open(CSV_PATH, "a", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow([
-            datetime.utcnow().isoformat(),
-            requests_total,
-            round(positive_ratio, 4),
-            round(avg_confidence, 4),
-            round(latency_ms, 2)
-        ])
+    cursor.execute(
+        """
+        INSERT INTO metrics (timestamp, text, label, confidence, latency_ms)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        timestamp,
+        payload.text,
+        label,
+        score,
+        latency_ms
+    )
+    conn.commit()
 
-    return PredictResponse(label=label, score=score)
+    return PredictResponse(
+        label=label,
+        score=score,
+        latency_ms=round(latency_ms, 2)
+    )
 
 
 if __name__ == "__main__":

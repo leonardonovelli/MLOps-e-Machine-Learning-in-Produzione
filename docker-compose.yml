@@ -1,23 +1,53 @@
+version: "3.9"
+
 services:
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: sqlserver
+    environment:
+      ACCEPT_EULA: ${ACCEPT_EULA}
+      SA_PASSWORD: ${SA_PASSWORD}
+    ports:
+      - ${SQL_PORT_MAPPING}
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P \"$SA_PASSWORD\" -Q \"SELECT 1\""]
+      interval: 10s
+      retries: 5
 
   api:
     build: .
-    ports:
-      - "8000:8000"
-    environment:
-      HF_MODEL: ${HF_REPO_ID}
-      HF_TOKEN: ${HF_TOKEN}
     volumes:
-      - ./data:/data
+      - ./app.py:/app/app.py
+    container_name: sentiment-api
+    ports:
+      - ${API_PORT_MAPPING}
+    environment:
+      HF_REPO_ID: ${HF_REPO_ID}
+      HF_TOKEN: ${HF_TOKEN}
+      SQL_SERVER: ${SQL_SERVER}
+      SQL_PORT: ${SQL_PORT}
+      SQL_USER: ${SQL_USER}
+      SQL_PASSWORD: ${SQL_PASSWORD}
+      SQL_DB: ${SQL_DB}
+    depends_on:
+      sqlserver:
+        condition: service_healthy
 
   grafana:
     image: grafana/grafana:latest
+    container_name: grafana
     ports:
-      - "3000:3000"
-    volumes:
-      - ./data:/var/lib/grafana/csv
-      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ${GRAFANA_PORT_MAPPING}
     environment:
-      GF_INSTALL_PLUGINS: marcusolsson-csv-datasource
       GF_SECURITY_ADMIN_PASSWORD: "admin"
       GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - sqlserver
+
+volumes:
+  sqlserver_data:

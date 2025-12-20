@@ -26,7 +26,7 @@ jobs:
       - name: Run pylint
         run: |
          FILES=$(git ls-files '*.py')
-         if [ -n "$FILES" ]; then pylint $FILES --fail-under=8.0; fi
+         if [ -n "$FILES" ]; then pylint $FILES --fail-under=9.0; fi
 
 
   tests:

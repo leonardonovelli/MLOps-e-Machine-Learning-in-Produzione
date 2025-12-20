@@ -3,7 +3,7 @@
 """
 Training pipeline per CI/CD.
 Esegue un training rapido su dataset HuggingFace e valuta metriche.
-Eseguo solo su un range di 200 osservazioni per non rendere lungo il processo
+Eseguo solo su un range di osservazioni per non rendere lungo il processo
 """
 
 import json
